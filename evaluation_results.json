@@ -1,0 +1,103 @@
+{
+  "timestamp": "2025-12-05T15:06:18.350179",
+  "summary": {
+    "total_tests": 10,
+    "passed_tests": 8,
+    "pass_rate": 80.0,
+    "avg_sources": 3.3,
+    "avg_similarity": 0.5415563786990882,
+    "avg_topic_coverage": 0.5666666666666667
+  },
+  "detailed_results": [
+    {
+      "question": "What is Carthage?",
+      "category": "fact",
+      "num_sources": 5,
+      "avg_similarity": 0.5787430776440261,
+      "answer_length": 298,
+      "topic_coverage": 1.0,
+      "passed": true
+    },
+    {
+      "question": "What makes Dougga special?",
+      "category": "fact",
+      "num_sources": 0,
+      "avg_similarity": 0,
+      "answer_length": 195,
+      "topic_coverage": 0.0,
+      "passed": false
+    },
+    {
+      "question": "Tell me about El Jem amphitheatre",
+      "category": "fact",
+      "num_sources": 2,
+      "avg_similarity": 0.5051443119649216,
+      "answer_length": 335,
+      "topic_coverage": 1.0,
+      "passed": true
+    },
+    {
+      "question": "Compare Carthage and Dougga",
+      "category": "comparison",
+      "num_sources": 5,
+      "avg_similarity": 0.5334131595701658,
+      "answer_length": 440,
+      "topic_coverage": 0.3333333333333333,
+      "passed": true
+    },
+    {
+      "question": "What are the main Roman sites in Tunisia?",
+      "category": "synthesis",
+      "num_sources": 5,
+      "avg_similarity": 0.5368804140443838,
+      "answer_length": 181,
+      "topic_coverage": 0.6666666666666666,
+      "passed": true
+    },
+    {
+      "question": "Describe the Punic civilization",
+      "category": "synthesis",
+      "num_sources": 5,
+      "avg_similarity": 0.5551815652508783,
+      "answer_length": 481,
+      "topic_coverage": 0.6666666666666666,
+      "passed": true
+    },
+    {
+      "question": "Who was Hannibal?",
+      "category": "fact",
+      "num_sources": 5,
+      "avg_similarity": 0.5912974347345041,
+      "answer_length": 64,
+      "topic_coverage": 0.0,
+      "passed": false
+    },
+    {
+      "question": "What is Kerkouane known for?",
+      "category": "fact",
+      "num_sources": 1,
+      "avg_similarity": 0.520865037742282,
+      "answer_length": 272,
+      "topic_coverage": 0.3333333333333333,
+      "passed": true
+    },
+    {
+      "question": "What are the Byzantine ruins in Tunisia?",
+      "category": "synthesis",
+      "num_sources": 5,
+      "avg_similarity": 0.5109260286415445,
+      "answer_length": 353,
+      "topic_coverage": 0.6666666666666666,
+      "passed": true
+    },
+    {
+      "question": "Where is the Eiffel Tower?",
+      "category": "off-topic",
+      "num_sources": 0,
+      "avg_similarity": 0,
+      "answer_length": 195,
+      "topic_coverage": 1.0,
+      "passed": true
+    }
+  ]
+}
