@@ -26,3 +26,6 @@ Thumbs.db
 
 # Environment variables
 .env
+"*.rar" 
+"*.zip" 
+"chroma_db/" 

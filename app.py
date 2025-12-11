@@ -2,6 +2,16 @@ import streamlit as st
 import chromadb
 from sentence_transformers import SentenceTransformer
 import ollama
+from deep_translator import GoogleTranslator
+from langdetect import detect, DetectorFactory
+from langdetect.lang_detect_exception import LangDetectException
+from audio_recorder_streamlit import audio_recorder
+import speech_recognition as sr
+import tempfile
+import os
+
+# Set seed for consistent language detection
+DetectorFactory.seed = 0
 
 # Page configuration
 st.set_page_config(
@@ -74,14 +84,14 @@ st.markdown("""
         transition: all 0.15s ease-in-out;
         background-color: white;
         box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        color: #1f2937 !important; /* BLACK TEXT COLOR */
+        color: #1f2937 !important;
     }
     
     .stTextInput>div>div>input:focus {
         border-color: #3b82f6;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         outline: none;
-        color: #1f2937 !important; /* BLACK TEXT COLOR ON FOCUS */
+        color: #1f2937 !important;
     }
     
     /* Force all inputs to have black text */
@@ -174,6 +184,44 @@ def load_components():
 
 embedding_model, collection = load_components()
 
+# Language name mapping (100+ languages supported)
+LANGUAGE_NAMES = {
+    'en': 'English', 'fr': 'French', 'ar': 'Arabic', 'es': 'Spanish',
+    'de': 'German', 'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian',
+    'zh-cn': 'Chinese (Simplified)', 'zh-tw': 'Chinese (Traditional)',
+    'ja': 'Japanese', 'ko': 'Korean', 'nl': 'Dutch', 'pl': 'Polish',
+    'tr': 'Turkish', 'sv': 'Swedish', 'da': 'Danish', 'fi': 'Finnish',
+    'no': 'Norwegian', 'cs': 'Czech', 'el': 'Greek', 'he': 'Hebrew',
+    'hi': 'Hindi', 'id': 'Indonesian', 'ms': 'Malay', 'th': 'Thai',
+    'vi': 'Vietnamese', 'uk': 'Ukrainian', 'ro': 'Romanian', 'hu': 'Hungarian',
+    'sk': 'Slovak', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sr': 'Serbian',
+    'ca': 'Catalan', 'lt': 'Lithuanian', 'lv': 'Latvian', 'et': 'Estonian',
+    'sl': 'Slovenian', 'af': 'Afrikaans', 'sq': 'Albanian', 'bn': 'Bengali',
+    'fa': 'Persian', 'ur': 'Urdu', 'sw': 'Swahili', 'ta': 'Tamil'
+}
+
+def detect_language(text):
+    """Automatically detect language from text (supports 100+ languages)"""
+    try:
+        detected_lang = detect(text)
+        return detected_lang
+    except LangDetectException:
+        return 'en'
+    except Exception:
+        return 'en'
+
+def translate_text(text, source_lang='auto', target_lang='en'):
+    """Translate text between any languages"""
+    try:
+        if source_lang == target_lang or (source_lang == 'auto' and target_lang == 'en'):
+            return text
+        
+        translator = GoogleTranslator(source=source_lang, target=target_lang)
+        translated = translator.translate(text)
+        return translated
+    except Exception as e:
+        return text
+
 def retrieve_context(question, top_k=5):
     question_embedding = embedding_model.encode([question])[0]
     results = collection.query(
@@ -208,6 +256,7 @@ def format_context(results):
     return context_text, formatted_sources
 
 def generate_answer(question, context):
+    """Generate answer in English (will be translated later)"""
     prompt = f"""You are an expert ONLY on Tunisian archaeological sites. You can ONLY answer questions about Tunisia's ancient heritage.
 
 Context from Tunisian archaeology database:
@@ -234,25 +283,53 @@ Answer:"""
     except Exception as e:
         return f"Error: {str(e)}"
 
-def rag_query(question):
-    results = retrieve_context(question, top_k=5)
+def rag_query(question, user_language='en'):
+    """Main RAG query function with automatic multilingual support"""
+    
+    # Step 1: Translate question to English for database search
+    question_english = question
+    if user_language != 'en':
+        try:
+            question_english = translate_text(question, source_lang=user_language, target_lang='en')
+        except:
+            question_english = question
+    
+    # Step 2: Search database with English query
+    results = retrieve_context(question_english, top_k=5)
     context, sources = format_context(results)
     
+    # Step 3: Check if we have relevant sources
     if not sources:
+        no_info_msg = "I don't have information about this topic. I can only answer questions about Tunisian archaeological sites like Carthage, Dougga, El Jem, Kerkouane, Sbeitla, and Bulla Regia."
+        if user_language != 'en':
+            no_info_msg = translate_text(no_info_msg, source_lang='en', target_lang=user_language)
         return {
-            'answer': "I don't have information about this topic. I can only answer questions about Tunisian archaeological sites like Carthage, Dougga, El Jem, Kerkouane, Sbeitla, and Bulla Regia.",
+            'answer': no_info_msg,
             'sources': []
         }
     
+    # Step 4: Check similarity threshold
     avg_similarity = sum(s['similarity'] for s in sources) / len(sources)
     
     if avg_similarity < 0.45:
+        not_found_msg = "I couldn't find relevant information about this in my database. Please ask about Tunisian archaeological sites."
+        if user_language != 'en':
+            not_found_msg = translate_text(not_found_msg, source_lang='en', target_lang=user_language)
         return {
-            'answer': "I couldn't find relevant information about this in my database. Please ask about Tunisian archaeological sites.",
+            'answer': not_found_msg,
             'sources': []
         }
     
-    answer = generate_answer(question, context)
+    # Step 5: Generate answer in English
+    answer = generate_answer(question_english, context)
+    
+    # Step 6: Translate answer back to user's language
+    if user_language != 'en':
+        try:
+            answer = translate_text(answer, source_lang='en', target_lang=user_language)
+        except:
+            pass
+    
     return {'answer': answer, 'sources': sources}
 
 # Header - Tailwind style
@@ -291,6 +368,10 @@ with st.sidebar:
             <div style='background: #fef3c7; color: #92400e; padding: 0.75rem; border-radius: 0.5rem; 
                         margin-top: 1rem; font-size: 0.9rem; font-weight: 600; border-left: 4px solid #f59e0b;'>
                 ⚠️ Specialized in Tunisian sites only!
+            </div>
+            <div style='background: #dbeafe; color: #1e40af; padding: 0.75rem; border-radius: 0.5rem; 
+                        margin-top: 1rem; font-size: 0.9rem; font-weight: 600; border-left: 4px solid #3b82f6;'>
+                🌍 Ask in ANY language - 100+ languages supported!
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -348,6 +429,8 @@ if 'history' not in st.session_state:
     st.session_state.history = []
 if 'question' not in st.session_state:
     st.session_state.question = ""
+if 'last_audio_processed' not in st.session_state:
+    st.session_state.last_audio_processed = None
 
 # Main interface
 col1, col2, col3 = st.columns([1, 6, 1])
@@ -361,28 +444,160 @@ with col2:
                 🔍 Ask Your Question
             </h2>
             <p style='text-align: center; color: #6b7280; margin: 0; font-size: 0.95rem;'>
-                Explore Tunisia's archaeological wonders
+                Explore Tunisia's archaeological wonders in any language 🌍
             </p>
         </div>
     """, unsafe_allow_html=True)
     
+    # Voice input section with AUTO-PROCESSING AND STATE CLEARING
+    st.markdown("### 🎤 Voice Input")
+    
+    audio_bytes = audio_recorder(
+        text="🎙️ Click to record",
+        recording_color="#e74c3c",
+        neutral_color="#3b82f6",
+        icon_name="microphone",
+        icon_size="2x",
+        pause_threshold=2.0,
+        key="audio_recorder"
+    )
+    
+    # Only process if we have NEW audio (not already processed)
+    if audio_bytes and audio_bytes != st.session_state.last_audio_processed:
+        st.audio(audio_bytes, format="audio/wav")
+        
+        # Mark this audio as processed
+        st.session_state.last_audio_processed = audio_bytes
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_bytes)
+            tmp_file_path = tmp_file.name
+        
+        # Transcribe
+        recognizer = sr.Recognizer()
+        try:
+            with sr.AudioFile(tmp_file_path) as source:
+                audio_data = recognizer.record(source)
+            
+            text = recognizer.recognize_google(audio_data, language='en-US')
+            st.success(f"✅ Transcribed: **{text}**")
+            
+            # AUTO-PROCESS THE QUESTION
+            detected_lang = detect_language(text)
+            lang_name = LANGUAGE_NAMES.get(detected_lang, detected_lang.upper())
+            
+            lang_flags = {
+                'en': '🇬🇧', 'fr': '🇫🇷', 'ar': '🇸🇦', 'es': '🇪🇸',
+                'de': '🇩🇪', 'it': '🇮🇹', 'pt': '🇵🇹', 'ru': '🇷🇺',
+                'zh-cn': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷', 'nl': '🇳🇱',
+                'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'hi': '🇮🇳'
+            }
+            flag = lang_flags.get(detected_lang, '🌍')
+            
+            st.info(f"{flag} Detected language: **{lang_name}**")
+            
+            with st.spinner("🤔 Searching through ancient texts..."):
+                result = rag_query(text, detected_lang)
+                
+                st.markdown("### 📝 Answer")
+                
+                cant_answer_keywords = [
+                    "can only answer", "couldn't find", "ne peux", "n'ai pas",
+                    "فقط", "لا أملك", "solo puedo", "nur", "alleen", "только"
+                ]
+                
+                is_rejection = any(keyword in result['answer'].lower() for keyword in cant_answer_keywords)
+                
+                if is_rejection:
+                    st.warning(result['answer'])
+                else:
+                    st.success(result['answer'])
+                
+                if result['sources']:
+                    st.markdown("### 📚 Referenced Sources")
+                    
+                    for source in result['sources']:
+                        similarity_percentage = source['similarity'] * 100
+                        
+                        if similarity_percentage > 70:
+                            color = "🟢"
+                        elif similarity_percentage > 50:
+                            color = "🟡"
+                        else:
+                            color = "🟠"
+                        
+                        with st.expander(f"{color} **{source['title']}** (Relevance: {similarity_percentage:.0f}%)"):
+                            st.markdown(f"**📖 Source:** {source['source']}")
+                            if source['site']:
+                                st.markdown(f"**📍 Site:** {source['site']}")
+                            st.progress(source['similarity'])
+                
+                # Add to history
+                st.session_state.history.append({
+                    'question': text,
+                    'answer': result['answer'],
+                    'sources': result['sources'],
+                    'language': lang_name
+                })
+            
+        except sr.UnknownValueError:
+            st.error("❌ Could not understand audio")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+        finally:
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+    
+    elif audio_bytes:
+        # Audio already processed, just show it
+        st.audio(audio_bytes, format="audio/wav")
+        st.info("💡 Audio already processed. Record a new question or type below.")
+    
+    st.markdown("### 💬 Or Type Your Question")
+    
     question = st.text_input(
         "",
         value=st.session_state.question,
-        placeholder="e.g., What are the main Roman monuments in Tunisia?",
+        placeholder="e.g., What is Carthage? | Qu'est-ce que Carthage? | ما هي قرطاج؟ | ¿Qué es Cartago? | Was ist Karthago?",
         label_visibility="collapsed"
     )
     
     ask_button = st.button("🚀 Ask Question", type="primary", use_container_width=True)
     
     if ask_button and question:
+        # Detect language automatically
+        detected_lang = detect_language(question)
+        
+        # Get language name
+        lang_name = LANGUAGE_NAMES.get(detected_lang, detected_lang.upper())
+        
+        # Show detected language with flag
+        lang_flags = {
+            'en': '🇬🇧', 'fr': '🇫🇷', 'ar': '🇸🇦', 'es': '🇪🇸',
+            'de': '🇩🇪', 'it': '🇮🇹', 'pt': '🇵🇹', 'ru': '🇷🇺',
+            'zh-cn': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷', 'nl': '🇳🇱',
+            'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'hi': '🇮🇳'
+        }
+        flag = lang_flags.get(detected_lang, '🌍')
+        
+        st.info(f"{flag} Detected language: **{lang_name}**")
+        
         with st.spinner("🤔 Searching through ancient texts..."):
-            result = rag_query(question)
+            result = rag_query(question, detected_lang)
             
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 📝 Answer")
             
-            if "can only answer" in result['answer'].lower() or "couldn't find relevant" in result['answer'].lower():
+            # Check for various "can't answer" messages in different languages
+            cant_answer_keywords = [
+                "can only answer", "couldn't find", "ne peux", "n'ai pas",
+                "فقط", "لا أملك", "solo puedo", "nur", "alleen", "только"
+            ]
+            
+            is_rejection = any(keyword in result['answer'].lower() for keyword in cant_answer_keywords)
+            
+            if is_rejection:
                 st.warning(result['answer'])
             else:
                 st.success(result['answer'])
@@ -410,7 +625,8 @@ with col2:
             st.session_state.history.append({
                 'question': question,
                 'answer': result['answer'],
-                'sources': result['sources']
+                'sources': result['sources'],
+                'language': lang_name
             })
             
             st.session_state.question = ""
@@ -422,7 +638,8 @@ if st.session_state.history:
         st.markdown("### 📜 Recent Conversations")
         
         for idx, item in enumerate(reversed(st.session_state.history[-3:])):
-            with st.expander(f"💭 {item['question']}", expanded=(idx==0)):
+            lang_display = f" ({item.get('language', 'Unknown')})" if 'language' in item else ""
+            with st.expander(f"💭 {item['question']}{lang_display}", expanded=(idx==0)):
                 st.markdown(f"**Question:** {item['question']}")
                 st.markdown(f"**Answer:** {item['answer']}")
                 st.caption(f"📚 {len(item['sources'])} sources referenced")
@@ -437,7 +654,7 @@ st.markdown("""
             Built using RAG Architecture
         </p>
         <p style='color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 0.95rem;'>
-            🇹🇳 Preserving Tunisia's Heritage Through Technology
+            🇹🇳 Preserving Tunisia's Heritage Through Technology | 🌍 100+ Languages Supported | 🎤 Voice Input Enabled
         </p>
     </div>
 """, unsafe_allow_html=True)

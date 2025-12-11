@@ -1,8 +1,27 @@
+# Core Framework
+streamlit==1.31.0
+
+# RAG Components
 chromadb==0.4.22
 sentence-transformers==2.3.1
 ollama==0.1.7
-streamlit==1.31.0
+
+# Translation & Language Detection
+deep-translator==1.11.4
+langdetect==1.0.9
+
+# Voice Input (NEW)
+audio-recorder-streamlit==0.0.10
+SpeechRecognition==3.10.4
+gTTS==2.5.1
+pydub==0.25.1
+
+# Data Processing
 beautifulsoup4==4.12.3
 requests==2.31.0
 PyPDF2==3.0.1
+
+# Utilities
 python-dotenv==1.0.0
+numpy==1.24.3
+pandas==2.0.3
