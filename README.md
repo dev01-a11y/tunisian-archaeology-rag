@@ -1,6 +1,4 @@
-🏛️ Tunisian Archaeology Chatbot (RAG + Voice)
-Short description of your project, for example:
-
+🏛️ Tunisian Archaeology Chatbot 
 A multilingual RAG chatbot specialized in Tunisian archaeological sites (Carthage, Dougga, El Jem, etc.), with voice input (Speech‑to‑Text) and a modern Streamlit UI.
 
 🚀 Features
